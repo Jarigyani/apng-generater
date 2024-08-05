@@ -1,9 +1,13 @@
+// Define the PNG file signature
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
+// Fetch an image from a URL and return it as a Uint8Array
 export const fetchImage = async (url: string): Promise<Uint8Array> => {
   const response = await fetch(url);
   return new Uint8Array(await response.arrayBuffer());
 };
+
+// Main function to create an APNG from an array of PNG images
 const createAPNG = async (
   images: Uint8Array[],
   delay: number
@@ -18,10 +22,11 @@ const createAPNG = async (
     throw new Error("IHDR chunk not found in the first image");
   }
 
+  // Get width and height from the IHDR chunk
   const width = new DataView(ihdrChunk.data.buffer).getUint32(0);
   const height = new DataView(ihdrChunk.data.buffer).getUint32(4);
 
-  // Add all chunks before IDAT
+  // Add all chunks before IDAT from the first image
   for (const chunk of firstImageChunks) {
     if (chunk.type === "IDAT") {
       break;
@@ -29,11 +34,14 @@ const createAPNG = async (
     chunks.push(createChunk(chunk.type, chunk.data));
   }
 
+  // Add the acTL (Animation Control) chunk
   chunks.push(createActlChunk(images.length));
 
   let sequenceNumber = 0;
 
+  // Process each image
   for (let i = 0; i < images.length; i++) {
+    // Add fcTL (Frame Control) chunk for each frame
     chunks.push(createFctlChunk(sequenceNumber++, width, height, delay));
 
     const imageChunks = extractAllChunks(images[i]);
@@ -42,17 +50,21 @@ const createAPNG = async (
       .map((chunk) => chunk.data);
 
     if (i === 0) {
+      // For the first image, add IDAT chunks as-is
       for (const idatData of idatChunks) {
         chunks.push(createChunk("IDAT", idatData));
       }
     } else {
+      // For subsequent images, convert IDAT chunks to fdAT chunks
       chunks.push(...createFdatChunks(idatChunks, sequenceNumber));
       sequenceNumber += idatChunks.length;
     }
   }
 
+  // Add the IEND chunk to signify the end of the PNG file
   chunks.push(createChunk("IEND", new Uint8Array(0)));
 
+  // Combine all chunks into a single Uint8Array
   const newPngData = concatenateUint8Arrays(chunks);
 
   return {
@@ -61,6 +73,7 @@ const createAPNG = async (
   };
 };
 
+// Convert IDAT chunks to fdAT chunks for APNG
 const createFdatChunks = (
   idatChunks: Uint8Array[],
   startSequenceNumber: number
@@ -73,11 +86,13 @@ const createFdatChunks = (
   });
 };
 
+// Interface for PNG chunks
 interface PNGChunk {
   type: string;
   data: Uint8Array;
 }
 
+// Extract all chunks from a PNG file
 const extractAllChunks = (pngData: Uint8Array): PNGChunk[] => {
   const chunks: PNGChunk[] = [];
   let offset = 8; // Skip PNG signature
@@ -101,14 +116,16 @@ const extractAllChunks = (pngData: Uint8Array): PNGChunk[] => {
   return chunks;
 };
 
+// Create the acTL (Animation Control) chunk
 const createActlChunk = (numFrames: number): Uint8Array => {
   const data = new Uint8Array(8);
   const view = new DataView(data.buffer);
   view.setUint32(0, numFrames);
-  view.setUint32(4, 0);
+  view.setUint32(4, 0); // Number of times to loop (0 = infinite)
   return createChunk("acTL", data);
 };
 
+// Create the fcTL (Frame Control) chunk
 const createFctlChunk = (
   sequenceNumber: number,
   width: number,
@@ -120,15 +137,16 @@ const createFctlChunk = (
   view.setUint32(0, sequenceNumber);
   view.setUint32(4, width);
   view.setUint32(8, height);
-  view.setUint32(12, 0);
-  view.setUint32(16, 0);
-  view.setUint16(20, delay);
-  view.setUint16(22, 1000);
-  view.setUint8(24, 0);
-  view.setUint8(25, 0);
+  view.setUint32(12, 0); // x offset
+  view.setUint32(16, 0); // y offset
+  view.setUint16(20, delay); // delay numerator
+  view.setUint16(22, 1000); // delay denominator
+  view.setUint8(24, 0); // dispose op
+  view.setUint8(25, 0); // blend op
   return createChunk("fcTL", data);
 };
 
+// Create a generic PNG chunk
 const createChunk = (type: string, data: Uint8Array): Uint8Array => {
   const length = new Uint8Array(4);
   new DataView(length.buffer).setUint32(0, data.length);
@@ -152,6 +170,7 @@ const createChunk = (type: string, data: Uint8Array): Uint8Array => {
   return chunk;
 };
 
+// Calculate CRC32 for chunk data
 const crc32 = (() => {
   const crcTable = new Uint32Array(256);
   for (let i = 0; i < 256; i++) {
@@ -171,6 +190,7 @@ const crc32 = (() => {
   };
 })();
 
+// Concatenate multiple Uint8Arrays into a single Uint8Array
 const concatenateUint8Arrays = (arrays: Uint8Array[]): Uint8Array => {
   const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
   const result = new Uint8Array(totalLength);
@@ -182,6 +202,7 @@ const concatenateUint8Arrays = (arrays: Uint8Array[]): Uint8Array => {
   return result;
 };
 
+// Main function to convert an array of PNGs to an APNG
 export const convertToAPNG = async (
   images: Uint8Array[],
   delay = 100
