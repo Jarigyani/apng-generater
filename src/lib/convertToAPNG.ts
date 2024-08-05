@@ -4,29 +4,47 @@ export const fetchImage = async (url: string): Promise<Uint8Array> => {
   const response = await fetch(url);
   return new Uint8Array(await response.arrayBuffer());
 };
-
 const createAPNG = async (
   images: Uint8Array[],
   delay: number
 ): Promise<{ blob: Blob; data: Uint8Array }> => {
   const firstImage = images[0];
-  const width = new DataView(firstImage.buffer).getUint32(16);
-  const height = new DataView(firstImage.buffer).getUint32(20);
+  const chunks: Uint8Array[] = [PNG_SIGNATURE];
 
-  const chunks: Uint8Array[] = [
-    PNG_SIGNATURE,
-    firstImage.slice(8, 33), // IHDR chunk
-    createActlChunk(images.length),
-  ];
+  // Extract all chunks from the first image
+  const firstImageChunks = extractAllChunks(firstImage);
+  const ihdrChunk = firstImageChunks.find((chunk) => chunk.type === "IHDR");
+  if (!ihdrChunk) {
+    throw new Error("IHDR chunk not found in the first image");
+  }
+
+  const width = new DataView(ihdrChunk.data.buffer).getUint32(0);
+  const height = new DataView(ihdrChunk.data.buffer).getUint32(4);
+
+  // Add all chunks before IDAT
+  for (const chunk of firstImageChunks) {
+    if (chunk.type === "IDAT") {
+      break;
+    }
+    chunks.push(createChunk(chunk.type, chunk.data));
+  }
+
+  chunks.push(createActlChunk(images.length));
 
   let sequenceNumber = 0;
 
   for (let i = 0; i < images.length; i++) {
     chunks.push(createFctlChunk(sequenceNumber++, width, height, delay));
 
-    const idatChunks = extractIDATChunks(images[i]);
+    const imageChunks = extractAllChunks(images[i]);
+    const idatChunks = imageChunks
+      .filter((chunk) => chunk.type === "IDAT")
+      .map((chunk) => chunk.data);
+
     if (i === 0) {
-      chunks.push(...idatChunks);
+      for (const idatData of idatChunks) {
+        chunks.push(createChunk("IDAT", idatData));
+      }
     } else {
       chunks.push(...createFdatChunks(idatChunks, sequenceNumber));
       sequenceNumber += idatChunks.length;
@@ -43,21 +61,41 @@ const createAPNG = async (
   };
 };
 
-const extractIDATChunks = (pngData: Uint8Array): Uint8Array[] => {
-  const chunks: Uint8Array[] = [];
-  let offset = 33; // PNG signature + IHDR
+const createFdatChunks = (
+  idatChunks: Uint8Array[],
+  startSequenceNumber: number
+): Uint8Array[] => {
+  return idatChunks.map((idatChunk, index) => {
+    const fdatData = new Uint8Array(idatChunk.length + 4);
+    new DataView(fdatData.buffer).setUint32(0, startSequenceNumber + index);
+    fdatData.set(idatChunk, 4);
+    return createChunk("fdAT", fdatData);
+  });
+};
 
-  while (offset < pngData.length - 12) {
-    const chunkLength = new DataView(pngData.buffer).getUint32(offset);
+interface PNGChunk {
+  type: string;
+  data: Uint8Array;
+}
+
+const extractAllChunks = (pngData: Uint8Array): PNGChunk[] => {
+  const chunks: PNGChunk[] = [];
+  let offset = 8; // Skip PNG signature
+
+  while (offset < pngData.length) {
+    const chunkLength = new DataView(pngData.buffer, offset).getUint32(0);
     const chunkType = new TextDecoder().decode(
       pngData.slice(offset + 4, offset + 8)
     );
+    const chunkData = pngData.slice(offset + 8, offset + 8 + chunkLength);
 
-    if (chunkType === "IDAT") {
-      chunks.push(pngData.slice(offset, offset + chunkLength + 12));
+    chunks.push({ type: chunkType, data: chunkData });
+
+    offset += chunkLength + 12; // 12 = 4(length) + 4(type) + 4(crc)
+
+    if (chunkType === "IEND") {
+      break;
     }
-
-    offset += chunkLength + 12;
   }
 
   return chunks;
@@ -89,19 +127,6 @@ const createFctlChunk = (
   view.setUint8(24, 0);
   view.setUint8(25, 0);
   return createChunk("fcTL", data);
-};
-
-const createFdatChunks = (
-  idatChunks: Uint8Array[],
-  startSequenceNumber: number
-): Uint8Array[] => {
-  return idatChunks.map((idatChunk, index) => {
-    const chunkLength = new DataView(idatChunk.buffer).getUint32(0);
-    const fdatData = new Uint8Array(chunkLength + 4);
-    new DataView(fdatData.buffer).setUint32(0, startSequenceNumber + index);
-    fdatData.set(idatChunk.slice(8, 8 + chunkLength), 4);
-    return createChunk("fdAT", fdatData);
-  });
 };
 
 const createChunk = (type: string, data: Uint8Array): Uint8Array => {
