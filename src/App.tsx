@@ -1,10 +1,15 @@
 import { For, Show, createEffect, createSignal } from "solid-js";
+import { createStore } from "solid-js/store";
 import { convertToAPNG, fetchImage } from "./lib/convertToAPNG";
 
 let fileInputRef: HTMLInputElement;
 
 function App() {
-  const [url, setUrl] = createSignal("");
+  const [data, setData] = createStore({
+    url: "",
+    binary: new Uint8Array(),
+    processingTime: "",
+  });
   const [files, setFiles] = createSignal<Uint8Array[]>([]);
   const [delay, setDelay] = createSignal(100);
 
@@ -33,14 +38,14 @@ function App() {
   };
 
   const handleDownload = () => {
-    if (url()) {
+    if (data.url) {
       const link = document.createElement("a");
-      link.href = url();
+      link.href = data.url;
       link.download = "output.png";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url());
+      URL.revokeObjectURL(data.url);
     }
   };
 
@@ -48,7 +53,7 @@ function App() {
     delay();
     if (files().length > 0) {
       const res = await convertToAPNG(await Promise.all(files()), delay());
-      if (res?.url) setUrl(res.url);
+      if (res?.url) setData(res);
     }
   });
 
@@ -61,7 +66,7 @@ function App() {
         sample images
       </button>
       <div class="w-64 h-64 flex justify-center items-center">
-        <Show fallback={<p>no images</p>} when={url()}>
+        <Show fallback={<p>no images</p>} when={data.url}>
           {(url) => (
             <img
               src={url()}
@@ -89,6 +94,11 @@ function App() {
           </For>
         </div>
       </div>
+      <Show when={data.url}>
+        <p>
+          Processed in <span class="font-bold">{data.processingTime}</span> ms
+        </p>
+      </Show>
       <div class="flex gap-5">
         <input
           ref={fileInputRef}
@@ -102,7 +112,7 @@ function App() {
           type="button"
           onClick={handleDownload}
           class="btn btn-outline"
-          disabled={!url()}
+          disabled={!data.url}
         >
           download
         </button>

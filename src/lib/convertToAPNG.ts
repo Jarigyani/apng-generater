@@ -11,7 +11,7 @@ export const fetchImage = async (url: string): Promise<Uint8Array> => {
 const createAPNG = async (
   images: Uint8Array[],
   delay: number
-): Promise<{ blob: Blob; data: Uint8Array }> => {
+): Promise<{ blob: Blob; binary: Uint8Array }> => {
   const firstImage = images[0];
   const chunks: Uint8Array[] = [PNG_SIGNATURE];
 
@@ -69,7 +69,7 @@ const createAPNG = async (
 
   return {
     blob: new Blob([newPngData], { type: "image/png" }),
-    data: newPngData,
+    binary: newPngData,
   };
 };
 
@@ -206,11 +206,15 @@ const concatenateUint8Arrays = (arrays: Uint8Array[]): Uint8Array => {
 export const convertToAPNG = async (
   images: Uint8Array[],
   delay = 100
-): Promise<{ url: string; data: Uint8Array } | undefined> => {
+): Promise<
+  { url: string; binary: Uint8Array; processingTime: string } | undefined
+> => {
   try {
-    const { blob, data } = await createAPNG(images, delay);
+    const start = performance.now();
+    const { blob, binary } = await createAPNG(images, delay);
     const url = URL.createObjectURL(blob);
-    return { url, data };
+    const processingTime = (performance.now() - start).toFixed(1);
+    return { url, binary, processingTime };
   } catch (error) {
     console.error("Error converting to APNG:", error);
     return undefined;
