@@ -60,8 +60,8 @@ function App() {
       <button type="button" onClick={handleClick} class="btn btn-outline">
         sample images
       </button>
-      <div class="w-64 h-64">
-        <Show when={url()}>
+      <div class="w-64 h-64 flex justify-center items-center">
+        <Show fallback={<p>no images</p>} when={url()}>
           {(url) => (
             <img
               src={url()}
@@ -71,24 +71,23 @@ function App() {
           )}
         </Show>
       </div>
-      <div class="flex">
-        <Show when={files().length === 0}>
-          <p class="mt-14">no images</p>
-        </Show>
-        <For each={files()}>
-          {(file, i) => (
-            <div class="flex flex-col gap-2 items-center">
-              <img
-                src={URL.createObjectURL(
-                  new Blob([file], { type: "image/png" })
-                )}
-                alt=""
-                class="object-cover w-12 disable-blur border border-neutral"
-              />
-              <p>{i() + 1}</p>
-            </div>
-          )}
-        </For>
+      <div class="max-w-lg overflow-scroll">
+        <div class="flex w-max">
+          <For each={files()}>
+            {(file, i) => (
+              <div class="flex flex-col gap-2 items-center">
+                <img
+                  src={URL.createObjectURL(
+                    new Blob([file], { type: "image/png" })
+                  )}
+                  alt=""
+                  class="object-cover disable-blur border border-neutral w-12"
+                />
+                <p class="badge">{i() + 1}</p>
+              </div>
+            )}
+          </For>
+        </div>
       </div>
       <div class="flex gap-5">
         <input
@@ -120,7 +119,7 @@ function App() {
         />
       </div>
       <p class="text-xl">
-        frame delay: <span class="font-bold">{delay()}</span>
+        frame delay: <span class="font-bold">{delay()}</span> ms
       </p>
     </div>
   );
