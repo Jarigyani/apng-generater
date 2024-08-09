@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { For, Show, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { convertToAPNG } from "./lib/convertToAPNG";
 
@@ -19,11 +19,19 @@ function App() {
   const [files, setFiles] = createSignal<Uint8Array[]>([]);
   const [delay, setDelay] = createSignal(100);
 
+  const convert = async () => {
+    if (files().length > 0) {
+      const res = await convertToAPNG(files(), delay());
+      if (res) setData(res);
+    }
+  };
+
   const handleClick = async () => {
     const paths = Array.from({ length: 12 }, (_, i) => `/run${i + 1}.png`);
     const images = await Promise.all(paths.map(fetchImage));
     setFiles(images);
     fileInputRef.value = "";
+    convert();
   };
 
   const handleInput = async (event: Event) => {
@@ -40,7 +48,9 @@ function App() {
       });
     });
 
-    setFiles(await Promise.all(images));
+    const binary = await Promise.all(images);
+    setFiles(binary);
+    convert();
   };
 
   const handleDownload = () => {
@@ -55,24 +65,16 @@ function App() {
     }
   };
 
-  createEffect(async () => {
-    delay();
-    if (files().length > 0) {
-      const res = await convertToAPNG(await Promise.all(files()), delay());
-      if (res?.url) setData(res);
-    }
-  });
-
   return (
     <div
       data-theme="light"
       class="flex flex-col h-screen justify-center items-center gap-5"
     >
       <button type="button" onClick={handleClick} class="btn btn-outline">
-        sample images
+        Sample images
       </button>
       <div class="w-64 h-64 flex justify-center items-center">
-        <Show fallback={<p>no images</p>} when={data.url}>
+        <Show fallback={<p>No images</p>} when={data.url}>
           {(url) => (
             <img
               src={url()}
@@ -120,7 +122,7 @@ function App() {
           class="btn btn-outline"
           disabled={!data.url}
         >
-          download
+          Download
         </button>
       </div>
       <div class="w-96">
@@ -134,9 +136,19 @@ function App() {
           oninput={(e) => setDelay(+e.currentTarget.value)}
         />
       </div>
-      <p class="text-xl">
-        frame delay: <span class="font-bold">{delay()}</span> ms
-      </p>
+      <div class="flex gap-5 items-center">
+        <p class="text-xl">
+          Frame delay: <span class="font-bold">{delay()}</span> ms
+        </p>
+        <button
+          type="button"
+          class="btn btn-outline"
+          disabled={!data.url}
+          onclick={convert}
+        >
+          Regenerate
+        </button>
+      </div>
     </div>
   );
 }
