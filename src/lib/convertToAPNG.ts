@@ -1,12 +1,6 @@
 // Define the PNG file signature
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
-// Fetch an image from a URL and return it as a Uint8Array
-export const fetchImage = async (url: string): Promise<Uint8Array> => {
-  const response = await fetch(url);
-  return new Uint8Array(await response.arrayBuffer());
-};
-
 // Main function to create an APNG from an array of PNG images
 const createAPNG = async (
   images: Uint8Array[],

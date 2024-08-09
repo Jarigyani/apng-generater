@@ -1,6 +1,12 @@
 import { For, Show, createEffect, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { convertToAPNG, fetchImage } from "./lib/convertToAPNG";
+import { convertToAPNG } from "./lib/convertToAPNG";
+
+// Fetch an image from a URL and return it as a Uint8Array
+const fetchImage = async (url: string): Promise<Uint8Array> => {
+  const response = await fetch(url);
+  return new Uint8Array(await response.arrayBuffer());
+};
 
 let fileInputRef: HTMLInputElement;
 
